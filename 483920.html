@@ -394,14 +394,6 @@ tbody tr:hover { background: #f8fafc; }
         </div>
       </div>
 
-      <!-- Donut: TP vs SL per Symbol -->
-      <div class="chart-box">
-        <div class="chart-title">สัดส่วนกำไร — แต่ละ Slave วันนี้</div>
-        <div class="chart-wrap" style="height:200px">
-          <canvas id="chartSlaveProfit"></canvas>
-        </div>
-      </div>
-
     </div>
 
     <!-- Open Positions -->
@@ -556,7 +548,7 @@ tbody tr:hover { background: #f8fafc; }
 <script>
 const GAS_REPORT_URL = 'https://script.google.com/macros/s/AKfycbwpjI4Tew8YHJpKHu5I8D-DMlIsgFCyAUP3KQcX2R33RLOhNKcZ9vKO898Wzw_PE6Xr/exec';
 
-let chartWR, chartDP, chartCum, chartSP, chartDep;
+let chartWR, chartDP, chartCum, chartDep;
 
 Chart.register(ChartDataLabels);
 Chart.defaults.font.family = "'Sarabun', 'Tahoma', sans-serif";
@@ -570,6 +562,13 @@ function fmtDate(d) {
 function setText(id, v) { const e = document.getElementById(id); if(e) e.textContent = v; }
 function setClass(id, cls) { const e = document.getElementById(id); if(e) e.className = cls; }
 function sign(n) { return n >= 0 ? '+' : ''; }
+function fmtMoney(n) { return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function accSuffix(accType) {
+  const t = String(accType||'').toLowerCase();
+  if(t.includes('cent')) return ' cen';
+  if(t.includes('standard')) return ' std';
+  return '';
+}
 
 // ── Fetch & Render ──
 async function fetchData(from, to) {
@@ -598,7 +597,7 @@ function renderAll(d) {
   setText('sumOpen',   s.openCount + ' ไม้');
   setText('sumWinRate', s.winRate + '%');
   setClass('sumWinRate', s.winRate >= 60 ? 'green' : s.winRate >= 40 ? 'orange' : 'red');
-  setText('sumProfit', sign(s.totalProfit) + '$' + s.totalProfit.toFixed(2));
+  setText('sumProfit', sign(s.totalProfit) + '$' + fmtMoney(s.totalProfit));
   setClass('sumProfit', 'value ' + (s.totalProfit >= 0 ? 'green' : 'red'));
   setText('sumWinSub', 'TP ' + s.tp + ' / (TP+SL) ' + (s.tp+s.sl));
 
@@ -606,7 +605,6 @@ function renderAll(d) {
   renderWinRate(s);
   renderDailyProfit(d.dailyProfit);
   renderCumulative(d.cumulativeProfit);
-  renderSlaveProfit(d.slaveProfit);
   renderDepositChart(d.depositChart || []);
 
   // Tables
@@ -675,24 +673,6 @@ function renderCumulative(cumData) {
   });
 }
 
-function renderSlaveProfit(slaves) {
-  const ctx = document.getElementById('chartSlaveProfit');
-  if(chartSP) chartSP.destroy();
-  const colors = ['#3b82f6','#16a34a','#ea580c','#7c3aed','#c9a227','#94a3b8'];
-  chartSP = new Chart(ctx, {
-    type:'bar',
-    data:{ labels: slaves.map(s=>s.name),
-      datasets:[{ label:'กำไร ($)', data: slaves.map(s=>s.profit),
-        backgroundColor: slaves.map((_,i)=>colors[i%colors.length]),
-        borderRadius:8, borderWidth:0 }]
-    },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, datalabels:{display:false} },
-      scales:{ y:{grid:{color:'#f1f5f9'},ticks:{callback:v=>'$'+v}}, x:{grid:{display:false}} }
-    }
-  });
-}
-
 function renderDepositChart(chartData) {
   const ctx = document.getElementById('chartDepositBar');
   if(chartDep) chartDep.destroy();
@@ -724,7 +704,7 @@ function renderPositions(positions) {
       <td><span class="tag tag-${p.type.toLowerCase()}">${p.type}</span></td>
       <td>${p.symbol}</td><td>${p.lot}</td><td>${p.openPrice.toFixed(2)}</td>
       <td><span class="red">${p.sl.toFixed(2)}</span> / <span class="green">${p.tp.toFixed(2)}</span></td>
-      <td class="${p.floatPnl>=0?'green':'red'}">${sign(p.floatPnl)}$${p.floatPnl.toFixed(2)}</td>
+      <td class="${p.floatPnl>=0?'green':'red'}">${sign(p.floatPnl)}$${fmtMoney(p.floatPnl)}</td>
     </tr>`).join('');
 }
 
@@ -741,16 +721,16 @@ function renderHistory(history) {
       <td><span class="tag tag-${h.type.toLowerCase()}">${h.type}</span></td>
       <td>${h.symbol}</td><td>${h.lot}</td>
       <td><span class="tag tag-${h.result.toLowerCase()}">${h.result}</span></td>
-      <td class="${h.profit>=0?'green':'red'}">${sign(h.profit)}$${h.profit.toFixed(2)}</td>
+      <td class="${h.profit>=0?'green':'red'}">${sign(h.profit)}$${fmtMoney(h.profit)}</td>
     </tr>`).join('');
   if(ft) {
     const tpP = history.filter(h=>h.profit>0).reduce((s,h)=>s+h.profit,0);
     const slP = history.filter(h=>h.profit<0).reduce((s,h)=>s+h.profit,0);
     const net = tpP+slP;
     ft.innerHTML = `
-      <div><span class="f-label">รวม TP </span><span class="f-val green">+$${tpP.toFixed(2)}</span></div>
-      <div><span class="f-label">รวม SL </span><span class="f-val red">$${slP.toFixed(2)}</span></div>
-      <div><span class="f-label">Net </span><span class="f-val ${net>=0?'green':'red'}">${sign(net)}$${net.toFixed(2)}</span></div>`;
+      <div><span class="f-label">รวม TP </span><span class="f-val green">+$${fmtMoney(tpP)}</span></div>
+      <div><span class="f-label">รวม SL </span><span class="f-val red">$${fmtMoney(slP)}</span></div>
+      <div><span class="f-label">Net </span><span class="f-val ${net>=0?'green':'red'}">${sign(net)}$${fmtMoney(net)}</span></div>`;
   }
 }
 
@@ -760,8 +740,8 @@ function renderAccounts(master, slaves) {
   if(master) {
     setText('masterName',    master.name || 'IRT GOLD Master');
     setText('masterAcc',     '#'+master.account+' · Powerzone_M_V1.0');
-    setText('masterBalance', '$'+master.balance.toFixed(2));
-    setText('masterEquity',  'Equity $'+master.equity.toFixed(2));
+    setText('masterBalance', '$'+fmtMoney(master.balance)+accSuffix(master.accType));
+    setText('masterEquity',  'Equity $'+fmtMoney(master.equity)+accSuffix(master.accType));
     const st = document.getElementById('masterStatus');
     if(st) { st.className = 'slave-stat-'+(master.status==='online'?'on':'off'); st.textContent = master.status==='online'?'Online':'Offline'; }
   }
@@ -785,7 +765,7 @@ function renderAccounts(master, slaves) {
           <td style="padding:6px 10px"><span class="tag tag-${t.type.toLowerCase()}">${t.type}</span></td>
           <td style="padding:6px 10px;font-size:8.5pt">${t.symbol}</td>
           <td style="padding:6px 10px"><span class="tag tag-${t.result.toLowerCase()}">${t.result}</span></td>
-          <td style="padding:6px 10px;font-weight:700;color:${t.profit>=0?'#16a34a':'#dc2626'}">${t.profit>=0?'+':''}$${t.profit.toFixed(2)}</td>
+          <td style="padding:6px 10px;font-weight:700;color:${t.profit>=0?'#16a34a':'#dc2626'}">${t.profit>=0?'+':''}$${fmtMoney(t.profit)}</td>
         </tr>`).join('')
       : `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px;font-size:8.5pt">ไม่มีประวัติในช่วงนี้</td></tr>`;
 
@@ -802,8 +782,8 @@ function renderAccounts(master, slaves) {
 
       <!-- Stats Grid -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-        <div class="slave-kv"><div class="k">Balance</div><div class="v blue" style="font-size:10pt">$${s.balance.toFixed(2)}</div></div>
-        <div class="slave-kv"><div class="k">กำไรวันนี้</div><div class="v ${s.profitToday>=0?'green':'red'}" style="font-size:10pt">${sign(s.profitToday)}$${s.profitToday.toFixed(2)}</div></div>
+        <div class="slave-kv"><div class="k">Balance</div><div class="v blue" style="font-size:10pt">$${fmtMoney(s.balance)}${accSuffix(s.accType)}</div></div>
+        <div class="slave-kv"><div class="k">กำไรวันนี้</div><div class="v ${s.profitToday>=0?'green':'red'}" style="font-size:10pt">${sign(s.profitToday)}$${fmtMoney(s.profitToday)}</div></div>
         <div class="slave-kv"><div class="k">Win Rate</div><div class="v" style="font-size:10pt">${wr}%</div></div>
         <div class="slave-kv"><div class="k">TP / SL</div><div class="v" style="font-size:10pt"><span class="green">${det.tp}</span> / <span class="red">${det.sl}</span></div></div>
       </div>
@@ -841,10 +821,10 @@ function renderAccounts(master, slaves) {
 }
 
 function renderDepositSummary(ds) {
-  setText('depTotal',  '+$'+(ds.totalDeposit||0).toFixed(2));
-  setText('withTotal', '-$'+(ds.totalWithdraw||0).toFixed(2));
+  setText('depTotal',  '+$'+fmtMoney(ds.totalDeposit||0));
+  setText('withTotal', '-$'+fmtMoney(ds.totalWithdraw||0));
   const net = ds.net||0;
-  setText('netDep', sign(net)+'$'+net.toFixed(2));
+  setText('netDep', sign(net)+'$'+fmtMoney(net));
   setClass('netDep', 'value '+(net>=0?'green':'red'));
 }
 
@@ -861,7 +841,7 @@ function renderDepositTable(deposits) {
       <td><strong>${d.name}</strong><br><span class="gray" style="font-size:8pt">#${d.account}</span></td>
       <td><span class="tag ${isCent?'tag-cent':'tag-std'}">${d.accType}</span></td>
       <td><span class="tag ${isDep?'tag-dep':'tag-wd'}">${isDep?'ฝากเงิน':'ถอนเงิน'}</span></td>
-      <td class="${isDep?'green':'red'}"><strong>${isDep?'+':'-'}$${d.amount.toFixed(2)}</strong></td>
+      <td class="${isDep?'green':'red'}"><strong>${isDep?'+':'-'}$${fmtMoney(d.amount)}</strong></td>
       <td class="gray" style="font-size:8.5pt">${d.note}</td>
     </tr>`; }).join('');
 }
