@@ -610,6 +610,7 @@ function renderAll(d) {
   renderDepositChart(d.depositChart || []);
 
   // Tables
+  _slaveDetails = d.slaveDetails || [];
   renderPositions(d.positions || []);
   renderHistory(d.history || []);
   renderAccounts(d.master, d.accounts || []);
@@ -753,9 +754,11 @@ function renderHistory(history) {
   }
 }
 
+let _slaveDetails = [];
+
 function renderAccounts(master, slaves) {
   if(master) {
-    setText('masterName',    master.name);
+    setText('masterName',    master.name || 'IRT GOLD Master');
     setText('masterAcc',     '#'+master.account+' · Powerzone_M_V1.0');
     setText('masterBalance', '$'+master.balance.toFixed(2));
     setText('masterEquity',  'Equity $'+master.equity.toFixed(2));
@@ -767,27 +770,69 @@ function renderAccounts(master, slaves) {
   const grid = document.getElementById('slaveGrid');
   if(!grid) return;
   if(!slaves.length) { grid.innerHTML='<div style="color:#94a3b8;padding:20px">ยังไม่มีข้อมูล Slave</div>'; return; }
-  const colors=['#3b82f6','#16a34a','#ea580c','#7c3aed','#c9a227','#94a3b8'];
+
   grid.innerHTML = slaves.map((s,i)=>{
     const on=s.status==='online';
     const wr=(s.win+s.loss)>0?Math.round(s.win/(s.win+s.loss)*100):0;
     const isCent=s.accType.toLowerCase().includes('cent');
+    const det=_slaveDetails.find(d=>String(d.account)===String(s.account))||{tp:0,sl:0,profit:0,trades:[]};
+    const displayName = s.name || ('บัญชี #'+s.account);
+
+    const tradeRows = det.trades.length
+      ? det.trades.map(t=>`
+        <tr>
+          <td style="padding:6px 10px;font-size:8.5pt;color:#64748b">${t.closeTime}</td>
+          <td style="padding:6px 10px"><span class="tag tag-${t.type.toLowerCase()}">${t.type}</span></td>
+          <td style="padding:6px 10px;font-size:8.5pt">${t.symbol}</td>
+          <td style="padding:6px 10px"><span class="tag tag-${t.result.toLowerCase()}">${t.result}</span></td>
+          <td style="padding:6px 10px;font-weight:700;color:${t.profit>=0?'#16a34a':'#dc2626'}">${t.profit>=0?'+':''}$${t.profit.toFixed(2)}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:12px;font-size:8.5pt">ไม่มีประวัติในช่วงนี้</td></tr>`;
+
     return `
     <div class="slave-card${on?'':' offline'}">
       <div class="slave-header">
         <div>
-          <div class="slave-name">${s.name}</div>
+          <div class="slave-name">${displayName}</div>
           <div class="slave-acc">#${s.account} · Powerzone_C_V1.0</div>
-          <div style="margin-top:4px"><span class="tag ${isCent?'tag-cent':'tag-std'}">${isCent?'Cent .tpxc':'Standard .tpx'}</span></div>
+          <div style="margin-top:4px"><span class="tag ${isCent?'tag-cent':'tag-std'}">${isCent?'Standard Cent':'Standard'}</span></div>
         </div>
         <span class="slave-stat-${on?'on':'off'}">${on?'Online':'Offline'}</span>
       </div>
-      <div class="slave-row2">
-        <div class="slave-kv"><div class="k">Balance</div><div class="v blue">$${s.balance.toFixed(2)}</div></div>
-        <div class="slave-kv"><div class="k">Equity</div><div class="v ${on?'green':'gray'}">$${s.equity.toFixed(2)}</div></div>
-        <div class="slave-kv"><div class="k">กำไรวันนี้</div><div class="v ${s.profitToday>=0?'green':'red'}">${sign(s.profitToday)}$${s.profitToday.toFixed(2)}</div></div>
-        <div class="slave-kv"><div class="k">Win Rate</div><div class="v">${wr}%</div></div>
+
+      <!-- Stats Grid -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <div class="slave-kv"><div class="k">Balance</div><div class="v blue" style="font-size:10pt">$${s.balance.toFixed(2)}</div></div>
+        <div class="slave-kv"><div class="k">กำไรวันนี้</div><div class="v ${s.profitToday>=0?'green':'red'}" style="font-size:10pt">${sign(s.profitToday)}$${s.profitToday.toFixed(2)}</div></div>
+        <div class="slave-kv"><div class="k">Win Rate</div><div class="v" style="font-size:10pt">${wr}%</div></div>
+        <div class="slave-kv"><div class="k">TP / SL</div><div class="v" style="font-size:10pt"><span class="green">${det.tp}</span> / <span class="red">${det.sl}</span></div></div>
       </div>
+
+      <!-- Mini Chart: TP vs SL -->
+      ${(det.tp+det.sl)>0 ? `
+      <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">
+        <div style="flex:${det.tp};background:#dcfce7;height:8px;border-radius:4px 0 0 4px;min-width:4px" title="TP ${det.tp}"></div>
+        <div style="flex:${det.sl};background:#fee2e2;height:8px;border-radius:0 4px 4px 0;min-width:4px" title="SL ${det.sl}"></div>
+        <span style="font-size:8pt;color:#94a3b8;white-space:nowrap">${det.tp} TP / ${det.sl} SL</span>
+      </div>` : ''}
+
+      <!-- Trade History -->
+      <div style="border:1px solid #f1f5f9;border-radius:8px;overflow:hidden;margin-bottom:10px">
+        <div style="background:#f8fafc;padding:6px 10px;font-size:8.5pt;font-weight:700;color:#475569">ประวัติล่าสุด (${det.trades.length} รายการ)</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f8fafc">
+              <th style="padding:5px 10px;font-size:8pt;color:#94a3b8;font-weight:600;text-align:left">เวลา</th>
+              <th style="padding:5px 10px;font-size:8pt;color:#94a3b8;font-weight:600;text-align:left">Type</th>
+              <th style="padding:5px 10px;font-size:8pt;color:#94a3b8;font-weight:600;text-align:left">Symbol</th>
+              <th style="padding:5px 10px;font-size:8pt;color:#94a3b8;font-weight:600;text-align:left">ผล</th>
+              <th style="padding:5px 10px;font-size:8pt;color:#94a3b8;font-weight:600;text-align:left">กำไร</th>
+            </tr>
+          </thead>
+          <tbody>${tradeRows}</tbody>
+        </table>
+      </div>
+
       <div class="slave-footer">
         <span class="slave-time">อัพเดท ${s.lastUpdate}</span>
         <span class="gray" style="font-size:8pt">${s.todayTrades} ไม้วันนี้</span>
